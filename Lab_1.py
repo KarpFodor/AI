@@ -34,8 +34,8 @@ class ImageProcessor:
         self.image = None
         self.file_path = None
 
-        self.zoom_scale = 1.0  # For tracking zoom level
-        self.canvas.bind("<MouseWheel>", self.zoom_image)  # Bind the mouse wheel for zoom
+        self.zoom_scale = 1.0  
+        self.canvas.bind("<MouseWheel>", self.zoom_image)  
 
     def load_image(self):
         self.file_path = filedialog.askopenfilename()
@@ -77,7 +77,7 @@ class ImageProcessor:
         image_pil = image_pil.resize((int(image_pil.width * self.zoom_scale), int(image_pil.height * self.zoom_scale)), Image.ANTIALIAS)
         image_tk = ImageTk.PhotoImage(image_pil)
 
-        self.canvas.create_image(350, 250, image=image_tk)  # Adjusted position to center
+        self.canvas.create_image(350, 250, image=image_tk)  
         self.canvas.image = image_tk
 
     def convert_to_binary(self, image, threshold):
@@ -158,13 +158,12 @@ class ImageProcessor:
         return norm_s1.tolist(), norm_m1.tolist()
 
     def zoom_image(self, event):
-        # Determine the direction of the zoom
+       
         if event.delta > 0:
-            self.zoom_scale *= 1.1  # Zoom in
+            self.zoom_scale *= 1.1  
         else:
-            self.zoom_scale /= 1.1  # Zoom out
+            self.zoom_scale /= 1.1 
 
-        # Show the updated image with the new scale
         if self.image is not None:
             self.show_image(self.image)
 
