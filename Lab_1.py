@@ -28,14 +28,23 @@ class ImageProcessor:
         self.process_button = tk.Button(root, text="Обробити зображення", command=self.process_image)
         self.process_button.pack()
 
-        self.canvas = tk.Canvas(root, width=700, height=500)
+        self.crop_button = tk.Button(root, text="Обрізати зображення", command=self.enable_crop)
+        self.crop_button.pack()
+
+        self.canvas = tk.Canvas(root, width=500, height=400)
         self.canvas.pack()
 
         self.image = None
         self.file_path = None
 
-        self.zoom_scale = 1.0  
-        self.canvas.bind("<MouseWheel>", self.zoom_image)  
+        self.zoom_scale = 1.0
+        self.canvas.bind("<MouseWheel>", self.zoom_image)
+
+        # Variables for cropping
+        self.crop_enabled = False
+        self.start_x = None
+        self.start_y = None
+        self.crop_rectangle = None
 
     def load_image(self):
         self.file_path = filedialog.askopenfilename()
@@ -74,12 +83,27 @@ class ImageProcessor:
     def show_image(self, image):
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_pil = Image.fromarray(image_rgb)
-        image_pil = image_pil.resize((int(image_pil.width * self.zoom_scale), int(image_pil.height * self.zoom_scale)), Image.ANTIALIAS)
-        image_tk = ImageTk.PhotoImage(image_pil)
 
-        self.canvas.create_image(350, 250, image=image_tk)  
+        # Масштабируем изображение в соответствии с текущим zoom_scale
+        self.scaled_image = image_pil.resize(
+            (int(image_pil.width * self.zoom_scale), int(image_pil.height * self.zoom_scale)), Image.ANTIALIAS)
+        image_tk = ImageTk.PhotoImage(self.scaled_image)
+
+        # Очищаем холст
+        self.canvas.delete("all")
+
+        # Вычисляем сдвиг для центрирования изображения
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        image_width, image_height = image_tk.width(), image_tk.height()
+
+        self.image_offset_x = (canvas_width - image_width) // 2
+        self.image_offset_y = (canvas_height - image_height) // 2
+
+        # Отображаем изображение на холсте с учетом сдвига
+        self.canvas.create_image(self.image_offset_x, self.image_offset_y, anchor=tk.NW, image=image_tk)
         self.canvas.image = image_tk
-
+        
     def convert_to_binary(self, image, threshold):
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         _, binary_image = cv2.threshold(gray_image, threshold, 255, cv2.THRESH_BINARY)
@@ -158,14 +182,58 @@ class ImageProcessor:
         return norm_s1.tolist(), norm_m1.tolist()
 
     def zoom_image(self, event):
-       
         if event.delta > 0:
             self.zoom_scale *= 1.1  
         else:
             self.zoom_scale /= 1.1 
-
         if self.image is not None:
             self.show_image(self.image)
+
+    def enable_crop(self):
+        self.crop_enabled = True
+        self.canvas.bind("<ButtonPress-1>", self.start_crop)
+        self.canvas.bind("<B1-Motion>", self.update_crop)
+        self.canvas.bind("<ButtonRelease-1>", self.perform_crop)
+
+    def start_crop(self, event):
+        if self.crop_enabled:
+            self.start_x, self.start_y = event.x, event.y
+            self.crop_rectangle = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline="red", width=2)
+
+    def update_crop(self, event):
+        if self.crop_enabled and self.crop_rectangle:
+            self.canvas.coords(self.crop_rectangle, self.start_x, self.start_y, event.x, event.y)
+
+    def perform_crop(self, event):
+        if self.crop_enabled:
+            self.crop_enabled = False
+            self.canvas.unbind("<ButtonPress-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
+
+            end_x, end_y = event.x, event.y
+            if self.image is not None:
+                # Пересчитываем координаты выделения относительно изображения, а не холста
+                crop_start_x = max(0, (self.start_x - self.image_offset_x) / self.zoom_scale)
+                crop_start_y = max(0, (self.start_y - self.image_offset_y) / self.zoom_scale)
+                crop_end_x = max(0, (end_x - self.image_offset_x) / self.zoom_scale)
+                crop_end_y = max(0, (end_y - self.image_offset_y) / self.zoom_scale)
+
+                crop_start_x = int(min(self.image.shape[1], crop_start_x))
+                crop_start_y = int(min(self.image.shape[0], crop_start_y))
+                crop_end_x = int(min(self.image.shape[1], crop_end_x))
+                crop_end_y = int(min(self.image.shape[0], crop_end_y))
+
+                # Обрезаем изображение
+                self.image = self.image[crop_start_y:crop_end_y, crop_start_x:crop_end_x]
+
+                # Удаляем красный прямоугольник с холста
+                self.canvas.delete(self.crop_rectangle)
+                self.crop_rectangle = None
+
+                # Отображаем обрезанное изображение
+                self.show_image(self.image)
+
 
 if __name__ == "__main__":
     root = tk.Tk()
